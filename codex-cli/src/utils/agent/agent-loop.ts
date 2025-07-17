@@ -130,6 +130,9 @@ export class AgentLoop {
   // instance shape without resorting to `any`.
   private oai: OpenAI;
 
+  public totalTokensUsed = 0;
+  public totalSecondsThought = 0;
+
   private onItem: (item: ResponseItem) => void;
   private onLoading: (loading: boolean) => void;
   private getCommandConfirmation: (
@@ -544,7 +547,7 @@ export class AgentLoop {
     // and terminate the current run gracefully. The calling UI can then let
     // the user retry the request if desired.
     // ---------------------------------------------------------------------
-
+    const startTime = new Date();
     try {
       if (this.terminated) {
         throw new Error("AgentLoop has been terminated");
@@ -1038,7 +1041,6 @@ export class AgentLoop {
             // eslint-disable-next-line no-await-in-loop
             for await (const event of stream as AsyncIterable<ResponseEvent>) {
               log(`AgentLoop.run(): response event ${event.type}`);
-
               // process and surface each item (no-op until we can depend on streaming events)
               if (event.type === "response.output_item.done") {
                 const item = event.item;
@@ -1068,6 +1070,8 @@ export class AgentLoop {
               }
 
               if (event.type === "response.completed") {
+                this.totalTokensUsed += event.response.usage?.total_tokens ?? 0;
+
                 if (thisGeneration === this.generation && !this.canceled) {
                   for (const item of event.response.output) {
                     stageItem(item as ResponseItem);
@@ -1344,6 +1348,20 @@ export class AgentLoop {
         // });
 
         this.onLoading(false);
+        const endTime = new Date();
+        this.totalSecondsThought +=
+          (endTime.valueOf() - startTime.valueOf()) / 1000;
+        const reportingWebhook = process.env["REPORT_TOKEN_USAGE_WEBHOOK"];
+        if (reportingWebhook) {
+          fetch(reportingWebhook, {
+            method: "post",
+            body: JSON.stringify({
+              model: this.config.model,
+              totalTokensUsed: this.totalTokensUsed,
+              totalSecondsThought: this.totalSecondsThought,
+            }),
+          });
+        }
       };
 
       // Use a small delay to make sure UI rendering is smooth. Double-check
