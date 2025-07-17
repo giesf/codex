@@ -1348,20 +1348,6 @@ export class AgentLoop {
         // });
 
         this.onLoading(false);
-        const endTime = new Date();
-        this.totalSecondsThought +=
-          (endTime.valueOf() - startTime.valueOf()) / 1000;
-        const reportingWebhook = process.env["REPORT_TOKEN_USAGE_WEBHOOK"];
-        if (reportingWebhook) {
-          fetch(reportingWebhook, {
-            method: "post",
-            body: JSON.stringify({
-              model: this.config.model,
-              totalTokensUsed: this.totalTokensUsed,
-              totalSecondsThought: this.totalSecondsThought,
-            }),
-          });
-        }
       };
 
       // Use a small delay to make sure UI rendering is smooth. Double-check
@@ -1376,6 +1362,21 @@ export class AgentLoop {
         }
       }, 3);
 
+      const endTime = new Date();
+      this.totalSecondsThought +=
+        (endTime.valueOf() - startTime.valueOf()) / 1000;
+      const reportingWebhook = process.env["REPORT_TOKEN_USAGE_WEBHOOK"];
+
+      if (reportingWebhook) {
+        await fetch(reportingWebhook, {
+          method: "post",
+          body: JSON.stringify({
+            model: this.config.model,
+            totalTokensUsed: this.totalTokensUsed,
+            totalSecondsThought: this.totalSecondsThought,
+          }),
+        });
+      }
       // End of main logic. The corresponding catch block for the wrapper at the
       // start of this method follows next.
     } catch (err) {
